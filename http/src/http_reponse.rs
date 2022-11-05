@@ -120,10 +120,13 @@ mod tests{
 
     #[test]
     fn test_read_http() {
-        let s = String::from("GET /greeting HTTP/1.1\r\nHost:localhost:3000\r\nUser-Agent: curl/7.71.1\r\nAccept: */8\r\n\r\n");
-        let mut headers_expected : HashMap<String, String>= HashMap::new();
-        headers_expected.insert("HOST".into(), " localhost".into());
+        let s = String::from("GET /greeting HTTP/1.1\r\nHost: localhost:3000\r\nUser-Agent: curl/7.71.1\r\nAccept: */8\r\n\r\n");
+        let mut headers_expected = HashMap::new();
+        headers_expected.insert("Host".into(), " localhost".into());
+        headers_expected.insert("User-Agent".into(), " curl/7.71.1".into());
+        headers_expected.insert("Accept".into(), " */8".into());
         let req: HttpRequest = s.into();
         assert_eq!(Method::Get, req.method);
+        assert_eq!(headers_expected, req.headers);
     }
 }
