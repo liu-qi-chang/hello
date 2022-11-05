@@ -1,132 +1,131 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Write};
 
-#[derive(Debug, PartialEq)]
-pub enum Method {
-    Get,
-    Post,
-    Uninit
+
+#[derive(Debug,Clone,PartialEq)]
+pub struct HttpReponse<'a>{
+    pub version: &'a str,
+    pub status_code: &'a str,
+    pub status_text: &'a str,
+    pub headers: Option<HashMap<&'a str, &'a str>>,
+    pub body: Option<String>,
 }
 
-impl From<&str> for Method{
-    fn from(s: &str) -> Method{
-        match s {
-            "GET" => Method::Get,
-            "POST" => Method::Post,
-            _ => Method::Uninit
-        }
-    }
-}
-#[derive(Debug, PartialEq)]
-pub enum Version{
-    V1_1,
-    Uninit
-}
-
-impl From<&str> for Version{
-    fn from(s: &str) -> Version{
-        match s {
-            "HTTP/1.1" => Version::V1_1,
-            _ => Version::Uninit
+impl<'a> Default for HttpReponse<'a> {
+    fn default() -> Self {
+        Self { 
+            version: "HTTP/1.1".into(),
+            status_code: "200".into(), 
+            status_text: "OK".into(), 
+            headers: None, 
+            body: None 
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Resource{
-    Path(String)
+impl<'a> From<HttpReponse<'a>> for String {
+    fn from(res: HttpReponse<'a>) -> Self {
+
+        let resq = res.clone();
+        format!(
+            "{} {} {}\r\n{}Content-Length: {}\r\n\r\n{}",
+            &resq.version(),
+            &resq.status_code(),
+            &resq.status_text(),
+            &resq.headers(),
+            &res.body.unwrap().len(),
+            &resq.body()
+        )
+    }
 }
 
-#[derive(Debug)]
-pub struct HttpRequest{
-    pub method: Method,
-    pub version: Version,
-    pub resource: Resource,
-    pub headers: HashMap<String, String>,
-    pub msg_body: String
-}
+impl<'a> HttpReponse<'a> {
+    pub fn new(
+        status_code: &'a str,
+        headers: Option<HashMap<&'a str, &'a str>>,
+        body: Option<String>,
+    ) -> HttpReponse<'a> {
 
-impl From<String> for HttpRequest {
-    fn from(req: String) -> Self{
-        let mut parsed_method = Method::Uninit;
-        let mut parsed_version = Version::V1_1;
-        let mut parsed_resource = Resource::Path("".to_string());
-        let mut parsed_headers = HashMap::new();
-        let mut parsed_msg_body = "";
-
-        for line in req.lines() {
-            if line.contains("HTTP") {
-                let (method, resource, version) = process_req_line(line);
-                parsed_method = method;
-                parsed_resource = resource;
-                parsed_version = version;
-            } else if line.contains(":"){
-                let (key, value) = process_header_line(line);
-                parsed_headers.insert(key, value);
-            } else if line.len() == 0 {
-
-            } else {
-                parsed_msg_body = line;
+        let mut reponse: HttpReponse<'a> = HttpReponse::default();
+        if status_code != "200"{
+            reponse.status_code = status_code.into();
+        }
+        reponse.headers = match &headers {
+            Some(_h) => headers,
+            None => {
+                let mut h = HashMap::new();
+                h.insert("Content-Type", "text/html");
+                Some(h)
             }
-        }
+        };
+        reponse.status_text = match reponse.status_code {
+            "200" => "OK".into(),
+            "400" => "Bad Request".into(),
+            "404" => "Not Found".into(),
+            "500" => "Ineternal Server Error".into(),
+            _ => "Not Found".into(),
+        };
+        reponse.body = body;
+        reponse
+    }
+    pub fn send_reponse(&self, write_stream: &mut impl Write) -> Result<(),()> {
+        let res = self.clone();
+        let reponse_string = String::from(res);
+        let _ = write!(write_stream, "{}", reponse_string);
+        Ok(())
+    }
 
-        HttpRequest {
-            method: parsed_method,
-            version: parsed_version,
-            resource: parsed_resource,
-            headers: parsed_headers,
-            msg_body: parsed_msg_body.to_string()
+    fn version(&self) -> &str {
+        self.version
+    }
+
+    fn status_code(&self) -> &str {
+        self.status_code
+    }
+
+    fn status_text(&self) -> &str {
+        self.status_text
+    }
+
+    fn headers(&self) -> String {
+        let map : HashMap<&str, &str> = self.headers.clone().unwrap();
+        let mut header_string : String = "".into();
+        for(k, v) in map.iter() {
+            header_string = format!("{}{}:{}\r\n", header_string, k, v);
+        }
+        header_string
+    }
+
+    pub fn body(&self) -> &str {
+        match &self.body {
+            Some(b) => b.as_str(),
+            None => "",
         }
     }
 }
-fn process_req_line(s: &str) -> (Method, Resource, Version) {
-    let mut words = s.split_whitespace();
-    let method = words.next().unwrap();
-    let resource = words.next().unwrap();
-    let version = words.next().unwrap();
 
-    (
-        method.into(),
-        Resource::Path(resource.to_string()),
-        version.into()
-    )
-}
-fn process_header_line(s: &str)->(String, String){
-    let mut header_items = s.split(":");
-    let mut key = String::from("");
-    let mut value = String::from("");
-    if let Some(k) = header_items.next() {
-        key = k.to_string();
-    }
-    if let Some(v) = header_items.next() {
-        value = v.to_string();
-    }
-    (key, value)
-}
 #[cfg(test)]
-mod tests{
+mod tests {
+    
     use super::*;
 
     #[test]
-    fn method_test () {
-        let m : Method = "GET".into();
-        assert_eq!(m, Method::Get)
-    }
-
-    #[test]
-    fn version_test () {
-        let m : Version = "HTTP/1.1".into();
-        assert_eq!(m, Version::V1_1)
-    }
-
-    #[test]
-    fn test_read_http() {
-        let s = String::from("GET /greeting HTTP/1.1\r\nHost: localhost:3000\r\nUser-Agent: curl/7.71.1\r\nAccept: */8\r\n\r\n");
-        let mut headers_expected = HashMap::new();
-        headers_expected.insert("Host".into(), " localhost".into());
-        headers_expected.insert("User-Agent".into(), " curl/7.71.1".into());
-        headers_expected.insert("Accept".into(), " */8".into());
-        let req: HttpRequest = s.into();
-        assert_eq!(Method::Get, req.method);
-        assert_eq!(headers_expected, req.headers);
+    fn test_response() {
+        let response_actual = HttpReponse::new(
+            "200",
+            None,
+            Some("xxx".into())
+        );
+        let res_excepted = HttpReponse {
+            version: "HTTP/1.1",
+            status_code: "200",
+            status_text: "OK",
+            headers: {
+                let mut h = HashMap::new();
+                h.insert("Content-Type", "text/html");
+                Some(h)
+            },
+            body: Some("xxx".into()),
+        };
+        assert_eq!(response_actual, res_excepted);
     }
 }
