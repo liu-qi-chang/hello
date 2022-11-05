@@ -1,3 +1,11 @@
+use std::net::TcpListener;
+
 fn main() {
-    println!("Hello, world!");
+    let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
+    println!("Hello, world! 3000");
+
+    for stream in listener.incoming() {
+        let mut stream = stream.unwrap();
+        println!("执行中。。。。。")
+    }
 }
