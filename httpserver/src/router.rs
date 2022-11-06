@@ -18,6 +18,7 @@ impl Router {
             http_request::Method::Get => match &req.resource {
                 http_request::Resource::Path(s) => {
                     let route: Vec<&str> = s.split("/").collect();
+                    println!("{}:{}",route.concat(), route[1]);
                     match route[1] {
                         "api" => {
                             let resp: HttpReponse = WebServiceHanlder::handle(&req);
