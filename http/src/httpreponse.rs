@@ -1,6 +1,5 @@
 use std::{collections::HashMap, io::Write};
 
-
 #[derive(Debug,Clone,PartialEq)]
 pub struct HttpReponse<'a>{
     pub version: &'a str,
